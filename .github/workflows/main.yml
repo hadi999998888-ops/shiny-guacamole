@@ -10,6 +10,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,13 +39,18 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: |
-            platform-tools
-            platforms;android-34
-            build-tools;34.0.0
+      - name: Install Android SDK
+        shell: bash
+        run: |
+          SDK="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          export PATH="$ANDROID_HOME/platform-tools:$PATH"
+
+          "$SDK" --licenses </dev/null || true
+
+          "$SDK" \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
 
       - name: Download fonts
         shell: bash
@@ -82,7 +91,7 @@ jobs:
 
           for name in "${!FONTS[@]}"; do
             if ! curl -fsSL --retry 2 "$BASE/${FONTS[$name]}" -o "$FONT_DIR/$name.ttf"; then
-              echo "Fallback font: $name"
+              echo "Using Roboto fallback: $name"
               cp "$FONT_DIR/roboto.ttf" "$FONT_DIR/$name.ttf"
             fi
           done
@@ -90,6 +99,7 @@ jobs:
       - name: Build EXTRA HUB
         shell: bash
         run: |
+          set -e
           cd "$PROJECT_DIR"
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug --stacktrace --console=plain
