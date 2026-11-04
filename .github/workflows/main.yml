@@ -19,7 +19,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Extract project
+        shell: bash
         run: |
+          set -e
           mkdir -p project
           unzip -o EXTRA-HUB-FULL-ANDROID-PROJECT.zip -d project
 
@@ -38,24 +40,70 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: '17'
 
-      - name: Install Android SDK packages
+      - name: Install Android SDK
+        shell: bash
         run: |
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
-
           yes | sdkmanager --licenses
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;34.0.0"
+      - name: Download fonts
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+
+          FONT_DIR="app/src/main/res/font"
+          mkdir -p "$FONT_DIR"
+
+          BASE="https://raw.githubusercontent.com/google/fonts/main"
+
+          curl -fL --retry 3 \
+            "$BASE/ofl/roboto/Roboto%5Bwdth,wght%5D.ttf" \
+            -o "$FONT_DIR/roboto.ttf"
+
+          declare -A FONTS=(
+            [montserrat]="ofl/montserrat/Montserrat%5Bwght%5D.ttf"
+            [oswald]="ofl/oswald/Oswald%5Bwght%5D.ttf"
+            [bebas_neue]="ofl/bebasneue/BebasNeue-Regular.ttf"
+            [rubik]="ofl/rubik/Rubik%5Bwght%5D.ttf"
+            [poppins]="ofl/poppins/Poppins%5Bwght%5D.ttf"
+            [anton]="ofl/anton/Anton-Regular.ttf"
+            [bangers]="ofl/bangers/Bangers-Regular.ttf"
+            [press_start_2p]="ofl/pressstart2p/PressStart2P-Regular.ttf"
+            [orbitron]="ofl/orbitron/Orbitron%5Bwght%5D.ttf"
+            [russo_one]="ofl/russoone/RussoOne-Regular.ttf"
+            [exo_2]="ofl/exo2/Exo2%5Bwght%5D.ttf"
+            [cinzel]="ofl/cinzel/Cinzel%5Bwght%5D.ttf"
+            [playfair_display]="ofl/playfairdisplay/PlayfairDisplay%5Bwght%5D.ttf"
+            [lobster]="ofl/lobster/Lobster-Regular.ttf"
+            [pacifico]="ofl/pacifico/Pacifico-Regular.ttf"
+            [caveat]="ofl/caveat/Caveat%5Bwght%5D.ttf"
+            [permanent_marker]="ofl/permanentmarker/PermanentMarker-Regular.ttf"
+            [teko]="ofl/teko/Teko%5Bwght%5D.ttf"
+            [rajdhani]="ofl/rajdhani/Rajdhani%5Bwght%5D.ttf"
+          )
+
+          for name in "${!FONTS[@]}"; do
+            echo "Downloading $name"
+            if ! curl -fL --retry 2 \
+              "$BASE/${FONTS[$name]}" \
+              -o "$FONT_DIR/$name.ttf"; then
+              echo "Using Roboto fallback for $name"
+              cp "$FONT_DIR/roboto.ttf" "$FONT_DIR/$name.ttf"
+            fi
+            test -s "$FONT_DIR/$name.ttf"
+          done
 
       - name: Build EXTRA HUB
+        shell: bash
         run: |
+          set -e
           cd "$PROJECT_DIR"
           chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug --stacktrace
+          ./gradlew --no-daemon assembleDebug --stacktrace --console=plain
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
