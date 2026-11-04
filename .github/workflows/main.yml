@@ -10,10 +10,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    env:
-      ANDROID_HOME: /usr/local/lib/android/sdk
-      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,10 +25,7 @@ jobs:
             echo "PROJECT_DIR=project" >> "$GITHUB_ENV"
           else
             DIR=$(find project -name settings.gradle.kts -printf '%h\n' | head -n 1)
-            if [ -z "$DIR" ]; then
-              echo "ERROR: Gradle project not found"
-              exit 1
-            fi
+            test -n "$DIR"
             echo "PROJECT_DIR=$DIR" >> "$GITHUB_ENV"
           fi
 
@@ -42,17 +35,18 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Android SDK
-        shell: bash
-        run: |
-          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
-          yes | sdkmanager --licenses
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platform-tools
+            platforms;android-34
+            build-tools;34.0.0
 
       - name: Download fonts
         shell: bash
         run: |
-          set -euo pipefail
+          set -e
           cd "$PROJECT_DIR"
 
           FONT_DIR="app/src/main/res/font"
@@ -87,20 +81,15 @@ jobs:
           )
 
           for name in "${!FONTS[@]}"; do
-            echo "Downloading $name"
-            if ! curl -fL --retry 2 \
-              "$BASE/${FONTS[$name]}" \
-              -o "$FONT_DIR/$name.ttf"; then
-              echo "Using Roboto fallback for $name"
+            if ! curl -fsSL --retry 2 "$BASE/${FONTS[$name]}" -o "$FONT_DIR/$name.ttf"; then
+              echo "Fallback font: $name"
               cp "$FONT_DIR/roboto.ttf" "$FONT_DIR/$name.ttf"
             fi
-            test -s "$FONT_DIR/$name.ttf"
           done
 
       - name: Build EXTRA HUB
         shell: bash
         run: |
-          set -e
           cd "$PROJECT_DIR"
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug --stacktrace --console=plain
