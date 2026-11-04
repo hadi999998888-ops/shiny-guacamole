@@ -1,0 +1,59 @@
+
+name: EXTRA HUB APK Build
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract project archive
+        run: |
+          mkdir -p project
+          unzip -o EXTRA-HUB-FULL-ANDROID-PROJECT.zip -d project
+
+          if [ -f project/settings.gradle.kts ]; then
+            echo "PROJECT_DIR=project" >> "$GITHUB_ENV"
+          else
+            DIR=$(find project -name settings.gradle.kts -printf '%h\n' | head -n 1)
+            if [ -z "$DIR" ]; then
+              echo "Gradle project not found!"
+              exit 1
+            fi
+            echo "PROJECT_DIR=$DIR" >> "$GITHUB_ENV"
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 34
+        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Build APK
+        run: |
+          cd "$PROJECT_DIR"
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Upload EXTRA HUB APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: EXTRA-HUB-debug-apk
+          path: |
+            ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          
